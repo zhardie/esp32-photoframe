@@ -27,7 +27,6 @@
 #define NVS_WIFI_PASS_KEY "wifi_pass"
 #define NVS_ROTATE_INTERVAL_KEY "rotate_int"
 #define NVS_AUTO_ROTATE_KEY "auto_rot"
-#define NVS_AUTO_ROTATE_INDEX_KEY "auto_idx"
 #define NVS_CURRENT_IMAGE_KEY "curr_img"
 
 #endif

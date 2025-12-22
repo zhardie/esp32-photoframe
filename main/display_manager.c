@@ -10,6 +10,7 @@
 #include "epaper_port.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_random.h"
 #include "esp_system.h"
 #include "esp_task_wdt.h"
 #include "freertos/FreeRTOS.h"
@@ -24,7 +25,6 @@ static SemaphoreHandle_t display_mutex = NULL;
 static int rotate_interval = IMAGE_ROTATE_INTERVAL_SEC;
 static bool auto_rotate_enabled = false;
 static char current_image[64] = {0};
-static int auto_rotate_index = 0;
 
 static uint8_t *epd_image_buffer = NULL;
 static uint32_t image_buffer_size;
@@ -67,11 +67,7 @@ esp_err_t display_manager_init(void)
                      auto_rotate_enabled ? "yes" : "no");
         }
 
-        int32_t stored_index = 0;
-        if (nvs_get_i32(nvs_handle, NVS_AUTO_ROTATE_INDEX_KEY, &stored_index) == ESP_OK) {
-            auto_rotate_index = stored_index;
-            ESP_LOGI(TAG, "Loaded auto-rotate index from NVS: %d", auto_rotate_index);
-        }
+        // Random rotation - no need to load index from NVS
 
         nvs_close(nvs_handle);
     }
@@ -265,26 +261,13 @@ void display_manager_handle_timer_wakeup(void)
     }
     closedir(dir);
 
-    // Ensure index is within bounds
-    if (auto_rotate_index >= image_count) {
-        auto_rotate_index = 0;
-    }
+    // Select random image
+    int random_index = esp_random() % image_count;
 
-    // Display current image
-    ESP_LOGI(TAG, "Auto-rotate: Displaying image %d/%d: %s", auto_rotate_index + 1, image_count,
-             image_list[auto_rotate_index]);
-    display_manager_show_image(image_list[auto_rotate_index]);
-
-    // Move to next image
-    auto_rotate_index = (auto_rotate_index + 1) % image_count;
-
-    // Save index to NVS
-    nvs_handle_t nvs_handle;
-    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle) == ESP_OK) {
-        nvs_set_i32(nvs_handle, NVS_AUTO_ROTATE_INDEX_KEY, auto_rotate_index);
-        nvs_commit(nvs_handle);
-        nvs_close(nvs_handle);
-    }
+    // Display random image
+    ESP_LOGI(TAG, "Auto-rotate: Displaying random image %d/%d: %s", random_index + 1, image_count,
+             image_list[random_index]);
+    display_manager_show_image(image_list[random_index]);
 
     // Free image list
     for (int i = 0; i < image_count; i++) {
@@ -292,5 +275,5 @@ void display_manager_handle_timer_wakeup(void)
     }
     free(image_list);
 
-    ESP_LOGI(TAG, "Auto-rotate complete, next index: %d", auto_rotate_index);
+    ESP_LOGI(TAG, "Auto-rotate complete");
 }
