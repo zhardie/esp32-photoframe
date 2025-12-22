@@ -73,17 +73,21 @@ static esp_err_t init_sdcard(void)
 
 static void button_task(void *arg)
 {
-    bool last_state = gpio_get_level(BOOT_BUTTON_GPIO);
-    bool current_state;
-    uint32_t press_time = 0;
+    bool last_boot_state = gpio_get_level(BOOT_BUTTON_GPIO);
+    bool last_key_state = gpio_get_level(KEY_BUTTON_GPIO);
+    bool current_boot_state, current_key_state;
+    uint32_t boot_press_time = 0;
+    uint32_t key_press_time = 0;
 
     while (1) {
-        current_state = gpio_get_level(BOOT_BUTTON_GPIO);
+        current_boot_state = gpio_get_level(BOOT_BUTTON_GPIO);
+        current_key_state = gpio_get_level(KEY_BUTTON_GPIO);
 
-        if (current_state == 0 && last_state == 1) {
-            press_time = xTaskGetTickCount();
-        } else if (current_state == 1 && last_state == 0) {
-            uint32_t duration = (xTaskGetTickCount() - press_time) * portTICK_PERIOD_MS;
+        // Handle BOOT button
+        if (current_boot_state == 0 && last_boot_state == 1) {
+            boot_press_time = xTaskGetTickCount();
+        } else if (current_boot_state == 1 && last_boot_state == 0) {
+            uint32_t duration = (xTaskGetTickCount() - boot_press_time) * portTICK_PERIOD_MS;
 
             if (duration > 50 && duration < 3000) {
                 ESP_LOGI(TAG, "Boot button pressed, resetting sleep timer");
@@ -91,7 +95,21 @@ static void button_task(void *arg)
             }
         }
 
-        last_state = current_state;
+        // Handle KEY button - trigger rotation
+        if (current_key_state == 0 && last_key_state == 1) {
+            key_press_time = xTaskGetTickCount();
+        } else if (current_key_state == 1 && last_key_state == 0) {
+            uint32_t duration = (xTaskGetTickCount() - key_press_time) * portTICK_PERIOD_MS;
+
+            if (duration > 50 && duration < 3000) {
+                ESP_LOGI(TAG, "Key button pressed, triggering rotation");
+                power_manager_reset_sleep_timer();
+                display_manager_handle_timer_wakeup();
+            }
+        }
+
+        last_boot_state = current_boot_state;
+        last_key_state = current_key_state;
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
@@ -177,6 +195,17 @@ void app_main(void)
         power_manager_enter_sleep_with_timer(display_manager_get_rotate_interval());
         // Won't reach here after sleep
     }
+    
+    // Check if this is a KEY button wakeup for manual rotation
+    if (power_manager_is_ext1_wakeup()) {
+        ESP_LOGI(TAG, "KEY button wakeup detected - rotate and sleep");
+        display_manager_handle_timer_wakeup();
+
+        // Go directly back to sleep without starting WiFi or HTTP server
+        ESP_LOGI(TAG, "Manual rotation complete, going back to sleep");
+        power_manager_enter_sleep_with_timer(display_manager_get_rotate_interval());
+        // Won't reach here after sleep
+    }
 
     ESP_ERROR_CHECK(wifi_manager_init());
     ESP_ERROR_CHECK(wifi_provisioning_init());
@@ -239,7 +268,7 @@ void app_main(void)
         ESP_LOGI(TAG, "===========================================");
     }
 
-    xTaskCreate(button_task, "button_task", 2048, NULL, 5, NULL);
+    xTaskCreate(button_task, "button_task", 8192, NULL, 5, NULL);
 
     // Mark system as ready for HTTP requests after all initialization is complete
     http_server_set_ready();

@@ -60,7 +60,7 @@ esp_err_t power_manager_init(void)
 
     gpio_config_t io_conf = {.intr_type = GPIO_INTR_DISABLE,
                              .mode = GPIO_MODE_INPUT,
-                             .pin_bit_mask = (1ULL << BOOT_BUTTON_GPIO),
+                             .pin_bit_mask = (1ULL << BOOT_BUTTON_GPIO) | (1ULL << KEY_BUTTON_GPIO),
                              .pull_down_en = GPIO_PULLDOWN_DISABLE,
                              .pull_up_en = GPIO_PULLUP_ENABLE};
     gpio_config(&io_conf);
@@ -85,8 +85,9 @@ void power_manager_enter_sleep(void)
         esp_sleep_enable_timer_wakeup(rotate_interval * 1000000ULL);
     }
 
-    // Always enable boot button wake-up
+    // Enable boot button and key button wake-up
     esp_sleep_enable_ext0_wakeup(BOOT_BUTTON_GPIO, 0);
+    esp_sleep_enable_ext1_wakeup((1ULL << KEY_BUTTON_GPIO), ESP_EXT1_WAKEUP_ALL_LOW);
 
     ESP_LOGI(TAG, "Entering deep sleep now");
     vTaskDelay(pdMS_TO_TICKS(100));
@@ -101,9 +102,10 @@ void power_manager_enter_sleep_with_timer(uint32_t sleep_time_sec)
 
     http_server_stop();
 
-    // Enable both timer and boot button wake-up
+    // Enable timer, boot button, and key button wake-up
     esp_sleep_enable_timer_wakeup(sleep_time_sec * 1000000ULL);  // Convert to microseconds
     esp_sleep_enable_ext0_wakeup(BOOT_BUTTON_GPIO, 0);
+    esp_sleep_enable_ext1_wakeup((1ULL << KEY_BUTTON_GPIO), ESP_EXT1_WAKEUP_ALL_LOW);
 
     ESP_LOGI(TAG, "Entering deep sleep now");
     vTaskDelay(pdMS_TO_TICKS(100));
@@ -120,4 +122,9 @@ void power_manager_reset_sleep_timer(void)
 bool power_manager_is_timer_wakeup(void)
 {
     return last_wakeup_cause == ESP_SLEEP_WAKEUP_TIMER;
+}
+
+bool power_manager_is_ext1_wakeup(void)
+{
+    return last_wakeup_cause == ESP_SLEEP_WAKEUP_EXT1;
 }
