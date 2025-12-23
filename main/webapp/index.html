@@ -192,7 +192,7 @@
         </section>
 
         <section class="card">
-            <h2>Auto-Rotate Settings</h2>
+            <h2>Settings</h2>
             <form id="configForm">
                 <div class="form-group">
                     <label>
@@ -203,6 +203,16 @@
                 <div class="form-group">
                     <label for="rotateInterval">Rotation Interval (seconds):</label>
                     <input type="number" id="rotateInterval" min="10" max="86400" value="3600">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="bleWake">
+                        Enable BLE Wake Mode
+                    </label>
+                    <small style="display: block; margin-top: 5px; color: #666;">
+                        When enabled, device uses light sleep (~1-5mA) instead of deep sleep (~100µA). 
+                        Allows remote wake-up via Bluetooth for Home Assistant integration.
+                    </small>
                 </div>
                 <button type="submit" class="btn btn-primary">Save Settings</button>
                 <div id="configStatus"></div>

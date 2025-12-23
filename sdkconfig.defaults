@@ -49,3 +49,8 @@ CONFIG_ESP_INT_WDT_TIMEOUT_MS=1000
 # Task Watchdog - Increase timeout for slow SD card writes during image conversion
 # Default is 5 seconds, increase to 15 seconds to allow for slow SD card operations
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=15
+
+# Bluetooth Configuration - Enable BLE for wake-up service
+CONFIG_BT_ENABLED=y
+# CONFIG_BT_BLE_50_FEATURES_SUPPORTED is not set
+CONFIG_BT_BLE_42_FEATURES_SUPPORTED=y

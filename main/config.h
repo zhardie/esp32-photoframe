@@ -31,5 +31,6 @@
 #define NVS_ROTATE_INTERVAL_KEY "rotate_int"
 #define NVS_AUTO_ROTATE_KEY "auto_rot"
 #define NVS_CURRENT_IMAGE_KEY "curr_img"
+#define NVS_BLE_WAKE_KEY "ble_wake"
 
 #endif

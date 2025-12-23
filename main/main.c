@@ -3,12 +3,15 @@
 #include <sys/stat.h>
 
 #include "axp_prot.h"
+#include "ble_wake_service.h"
 #include "config.h"
 #include "display_manager.h"
+#include "dns_server.h"
 #include "driver/gpio.h"
 #include "driver/sdmmc_host.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_sleep.h"
 #include "esp_system.h"
 #include "esp_vfs_fat.h"
 #include "freertos/FreeRTOS.h"
@@ -17,8 +20,10 @@
 #include "i2c_bsp.h"
 #include "image_processor.h"
 #include "mdns_service.h"
+#include "nvs.h"
 #include "nvs_flash.h"
 #include "power_manager.h"
+#include "sdcard_bsp.h"
 #include "sdmmc_cmd.h"
 #include "wifi_manager.h"
 #include "wifi_provisioning.h"
@@ -276,6 +281,13 @@ void app_main(void)
     }
 
     ESP_ERROR_CHECK(http_server_init());
+
+    // Initialize BLE wake service (will only start if enabled in NVS)
+    ESP_ERROR_CHECK(ble_wake_service_init());
+    if (ble_wake_service_get_enabled()) {
+        ESP_LOGI(TAG, "BLE wake mode enabled, starting BLE advertising");
+        ESP_ERROR_CHECK(ble_wake_service_start());
+    }
 
     if (wifi_manager_is_connected()) {
         char ip_str[16];

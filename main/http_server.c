@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "axp_prot.h"
+#include "ble_wake_service.h"
 #include "cJSON.h"
 #include "config.h"
 #include "display_manager.h"
@@ -891,10 +892,12 @@ static esp_err_t config_handler(httpd_req_t *req)
     if (req->method == HTTP_GET) {
         int rotate_interval = display_manager_get_rotate_interval();
         bool auto_rotate = display_manager_get_auto_rotate();
+        bool ble_wake = ble_wake_service_get_enabled();
 
         cJSON *root = cJSON_CreateObject();
         cJSON_AddNumberToObject(root, "rotate_interval", rotate_interval);
         cJSON_AddBoolToObject(root, "auto_rotate", auto_rotate);
+        cJSON_AddBoolToObject(root, "ble_wake", ble_wake);
 
         char *json_str = cJSON_Print(root);
         httpd_resp_set_type(req, "application/json");
@@ -928,6 +931,11 @@ static esp_err_t config_handler(httpd_req_t *req)
         cJSON *auto_rotate_obj = cJSON_GetObjectItem(root, "auto_rotate");
         if (auto_rotate_obj && cJSON_IsBool(auto_rotate_obj)) {
             display_manager_set_auto_rotate(cJSON_IsTrue(auto_rotate_obj));
+        }
+
+        cJSON *ble_wake_obj = cJSON_GetObjectItem(root, "ble_wake");
+        if (ble_wake_obj && cJSON_IsBool(ble_wake_obj)) {
+            ble_wake_service_set_enabled(cJSON_IsTrue(ble_wake_obj));
         }
 
         cJSON_Delete(root);

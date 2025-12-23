@@ -916,6 +916,7 @@ async function loadConfig() {
         
         document.getElementById('autoRotate').checked = data.auto_rotate || false;
         document.getElementById('rotateInterval').value = data.rotate_interval || 3600;
+        document.getElementById('bleWake').checked = data.ble_wake || false;
     } catch (error) {
         // Silently fail if API not available (standalone mode)
         console.log('Config API not available (standalone mode)');
@@ -928,6 +929,7 @@ document.getElementById('configForm').addEventListener('submit', async (e) => {
     const statusDiv = document.getElementById('configStatus');
     const autoRotate = document.getElementById('autoRotate').checked;
     const rotateInterval = parseInt(document.getElementById('rotateInterval').value);
+    const bleWake = document.getElementById('bleWake').checked;
     
     try {
         const response = await fetch(`${API_BASE}/api/config`, {
@@ -937,7 +939,8 @@ document.getElementById('configForm').addEventListener('submit', async (e) => {
             },
             body: JSON.stringify({
                 auto_rotate: autoRotate,
-                rotate_interval: rotateInterval
+                rotate_interval: rotateInterval,
+                ble_wake: bleWake
             })
         });
         

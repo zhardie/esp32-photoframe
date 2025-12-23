@@ -11,3 +11,6 @@ idf_component_register(
   PRIV_REQUIRES driver fatfs sdmmc sdcard_bsp
   INCLUDE_DIRS 
   ${include_dirs})
+
+# Disable warnings-as-errors for this component (Chinese font files have string truncation warnings in ESP-IDF v6.0)
+target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error)

@@ -307,7 +307,7 @@ sensor:
 
 ### `POST /api/sleep`
 
-Trigger device to enter deep sleep mode immediately.
+Trigger device to enter sleep mode immediately.
 
 **Request:**
 ```json
@@ -325,8 +325,10 @@ No request body required (can be empty JSON or omitted).
 ```
 
 **Behavior:**
-- Device will send HTTP response, then enter deep sleep after 500ms
-- In deep sleep, power consumption is ~100µA
+- Device will send HTTP response, then enter sleep after 500ms
+- Sleep mode depends on BLE wake configuration:
+  - **BLE wake disabled**: Deep sleep (~100µA power consumption)
+  - **BLE wake enabled**: Light sleep with BLE active (~1-5mA power consumption)
 - Wake-up behavior depends on auto-rotate configuration:
   - **If auto-rotate is enabled**: Device will wake up after the configured rotation interval
   - **If auto-rotate is disabled**: Device will sleep indefinitely until manually woken

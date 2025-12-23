@@ -9,7 +9,6 @@
 #include "esp_sleep.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "http_server.h"
 
 static const char *TAG = "power_manager";
 
@@ -156,8 +155,6 @@ void power_manager_enter_sleep(void)
     gpio_set_level(LED_RED_GPIO, 1);
     gpio_set_level(LED_GREEN_GPIO, 1);
 
-    http_server_stop();
-
     // Check if auto-rotate is enabled
     if (display_manager_get_auto_rotate()) {
         // Use timer-based sleep for auto-rotate
@@ -184,8 +181,6 @@ void power_manager_enter_sleep_with_timer(uint32_t sleep_time_sec)
     // Turn off LEDs before sleep to save power (active-low)
     gpio_set_level(LED_RED_GPIO, 1);
     gpio_set_level(LED_GREEN_GPIO, 1);
-
-    http_server_stop();
 
     // Enable timer, boot button, and key button wake-up (ESP32-S3 only supports EXT1)
     esp_sleep_enable_timer_wakeup(sleep_time_sec * 1000000ULL);  // Convert to microseconds
