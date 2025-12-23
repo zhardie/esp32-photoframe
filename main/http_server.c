@@ -860,6 +860,7 @@ static esp_err_t config_handler(httpd_req_t *req)
         cJSON *interval_obj = cJSON_GetObjectItem(root, "rotate_interval");
         if (interval_obj && cJSON_IsNumber(interval_obj)) {
             display_manager_set_rotate_interval(interval_obj->valueint);
+            power_manager_reset_rotate_timer();
         }
 
         cJSON *auto_rotate_obj = cJSON_GetObjectItem(root, "auto_rotate");

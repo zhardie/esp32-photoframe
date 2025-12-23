@@ -204,6 +204,11 @@ void power_manager_reset_sleep_timer(void)
     sleep_enabled = true;  // Enable sleep timer when user interacts with web server
 }
 
+void power_manager_reset_rotate_timer(void)
+{
+    rotate_countdown = display_manager_get_rotate_interval();
+}
+
 bool power_manager_is_timer_wakeup(void)
 {
     return last_wakeup_cause == ESP_SLEEP_WAKEUP_TIMER;
