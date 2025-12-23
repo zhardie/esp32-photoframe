@@ -662,7 +662,12 @@ static esp_err_t display_image_handler(httpd_req_t *req)
     }
 
     const char *filename = filename_obj->valuestring;
-    esp_err_t err = display_manager_show_image(filename);
+
+    // Build absolute path
+    char filepath[256];
+    snprintf(filepath, sizeof(filepath), "/sdcard/images/%s", filename);
+
+    esp_err_t err = display_manager_show_image(filepath);
 
     cJSON_Delete(root);
 
@@ -673,6 +678,128 @@ static esp_err_t display_image_handler(httpd_req_t *req)
 
     cJSON *response = cJSON_CreateObject();
     cJSON_AddStringToObject(response, "status", "success");
+
+    char *json_str = cJSON_Print(response);
+    httpd_resp_set_type(req, "application/json");
+
+    esp_err_t send_err = httpd_resp_sendstr(req, json_str);
+
+    free(json_str);
+    cJSON_Delete(response);
+
+    if (send_err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to send response (connection likely closed): %d", send_err);
+    }
+
+    return ESP_OK;
+}
+
+static esp_err_t display_image_direct_handler(httpd_req_t *req)
+{
+    if (!system_ready) {
+        httpd_resp_set_status(req, HTTPD_503);
+        httpd_resp_sendstr(req, "System is still initializing");
+        return ESP_FAIL;
+    }
+
+    power_manager_reset_sleep_timer();
+
+    // Check if display is already busy
+    if (display_manager_is_busy()) {
+        ESP_LOGW(TAG, "Display is busy, rejecting request");
+        cJSON *response = cJSON_CreateObject();
+        cJSON_AddStringToObject(response, "status", "busy");
+        cJSON_AddStringToObject(response, "message", "Display is currently updating, please wait");
+
+        char *json_str = cJSON_Print(response);
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_set_status(req, "503 Service Unavailable");
+        httpd_resp_sendstr(req, json_str);
+
+        free(json_str);
+        cJSON_Delete(response);
+        return ESP_OK;
+    }
+
+    // Get content length
+    size_t content_len = req->content_len;
+    if (content_len == 0 || content_len > 5 * 1024 * 1024) {  // Max 5MB
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid content length (max 5MB)");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "Receiving JPG image for direct display, size: %d bytes", content_len);
+
+    // Create temporary file path in /sdcard root
+    const char *temp_jpg_path = "/sdcard/.temp_upload.jpg";
+    const char *temp_bmp_path = "/sdcard/.temp_upload.bmp";
+
+    // Open file for writing
+    FILE *fp = fopen(temp_jpg_path, "wb");
+    if (!fp) {
+        ESP_LOGE(TAG, "Failed to create temporary file");
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR,
+                            "Failed to create temporary file");
+        return ESP_FAIL;
+    }
+
+    // Receive and write data in chunks
+    char *buf = malloc(4096);
+    if (!buf) {
+        fclose(fp);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Memory allocation failed");
+        return ESP_FAIL;
+    }
+
+    size_t received = 0;
+    while (received < content_len) {
+        size_t to_read = MIN(4096, content_len - received);
+        int ret = httpd_req_recv(req, buf, to_read);
+        if (ret <= 0) {
+            if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+                continue;
+            }
+            ESP_LOGE(TAG, "Failed to receive data");
+            free(buf);
+            fclose(fp);
+            unlink(temp_jpg_path);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to receive data");
+            return ESP_FAIL;
+        }
+        fwrite(buf, 1, ret, fp);
+        received += ret;
+    }
+
+    free(buf);
+    fclose(fp);
+
+    ESP_LOGI(TAG, "JPG image received successfully, processing...");
+
+    // Convert JPG to BMP using image processor
+    esp_err_t err = image_processor_convert_jpg_to_bmp(temp_jpg_path, temp_bmp_path, false);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to convert JPG to BMP");
+        unlink(temp_jpg_path);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to process image");
+        return ESP_FAIL;
+    }
+
+    // Display the converted BMP (use full path to bypass IMAGE_DIRECTORY prefix)
+    err = display_manager_show_image("/sdcard/.temp_upload.bmp");
+
+    // Clean up temporary files
+    unlink(temp_jpg_path);
+    // Keep the BMP file for now in case we want to redisplay it
+
+    if (err != ESP_OK) {
+        unlink(temp_bmp_path);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to display image");
+        return ESP_FAIL;
+    }
+
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddStringToObject(response, "status", "success");
+    cJSON_AddStringToObject(response, "message", "Image displayed successfully");
 
     char *json_str = cJSON_Print(response);
     httpd_resp_set_type(req, "application/json");
@@ -847,6 +974,12 @@ esp_err_t http_server_init(void)
                                    .handler = display_image_handler,
                                    .user_ctx = NULL};
         httpd_register_uri_handler(server, &display_uri);
+
+        httpd_uri_t display_image_direct_uri = {.uri = "/api/display-image",
+                                                .method = HTTP_POST,
+                                                .handler = display_image_direct_handler,
+                                                .user_ctx = NULL};
+        httpd_register_uri_handler(server, &display_image_direct_uri);
 
         httpd_uri_t delete_uri = {.uri = "/api/delete",
                                   .method = HTTP_POST,

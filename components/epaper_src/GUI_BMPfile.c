@@ -467,7 +467,7 @@ UBYTE GUI_ReadBmp_RGB_6Color(const char *path, UWORD Xstart, UWORD Ystart)
     // Binary file open
     if((fp = fopen(path, "rb")) == NULL) {
         ESP_LOGE(TAG,"Cann't open the file!");
-        return 0;
+        return 1;
     }
 
     // Set the file pointer from the beginning

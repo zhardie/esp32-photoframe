@@ -67,19 +67,28 @@ static int find_closest_color(uint8_t r, uint8_t g, uint8_t b, const rgb_t *pal)
 static void apply_floyd_steinberg_dither(uint8_t *image, int width, int height,
                                          const rgb_t *dither_palette)
 {
-    int *errors = (int *) heap_caps_calloc(width * height * 3, sizeof(int), MALLOC_CAP_SPIRAM);
-    if (!errors) {
-        ESP_LOGE(TAG, "Failed to allocate error buffer");
+    // Use two scanlines for error diffusion (current and next row)
+    // This reduces memory from ~4.6MB to ~10KB for 800x480
+    int *curr_errors = (int *) heap_caps_calloc(width * 3, sizeof(int), MALLOC_CAP_SPIRAM);
+    int *next_errors = (int *) heap_caps_calloc(width * 3, sizeof(int), MALLOC_CAP_SPIRAM);
+
+    if (!curr_errors || !next_errors) {
+        ESP_LOGE(TAG, "Failed to allocate error buffers");
+        if (curr_errors)
+            free(curr_errors);
+        if (next_errors)
+            free(next_errors);
         return;
     }
 
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            int idx = (y * width + x) * 3;
+            int img_idx = (y * width + x) * 3;
+            int err_idx = x * 3;
 
-            int old_r = image[idx] + errors[idx];
-            int old_g = image[idx + 1] + errors[idx + 1];
-            int old_b = image[idx + 2] + errors[idx + 2];
+            int old_r = image[img_idx] + curr_errors[err_idx];
+            int old_g = image[img_idx + 1] + curr_errors[err_idx + 1];
+            int old_b = image[img_idx + 2] + curr_errors[err_idx + 2];
 
             old_r = (old_r < 0) ? 0 : (old_r > 255) ? 255 : old_r;
             old_g = (old_g < 0) ? 0 : (old_g > 255) ? 255 : old_g;
@@ -89,46 +98,54 @@ static void apply_floyd_steinberg_dither(uint8_t *image, int width, int height,
             int color_idx = find_closest_color(old_r, old_g, old_b, dither_palette);
 
             // Output using theoretical palette (for BMP/firmware compatibility)
-            image[idx] = palette[color_idx].r;
-            image[idx + 1] = palette[color_idx].g;
-            image[idx + 2] = palette[color_idx].b;
+            image[img_idx] = palette[color_idx].r;
+            image[img_idx + 1] = palette[color_idx].g;
+            image[img_idx + 2] = palette[color_idx].b;
 
             // Calculate error using specified dither palette (for error diffusion)
             int err_r = old_r - dither_palette[color_idx].r;
             int err_g = old_g - dither_palette[color_idx].g;
             int err_b = old_b - dither_palette[color_idx].b;
 
+            // Distribute error to neighboring pixels
             if (x + 1 < width) {
-                int next_idx = idx + 3;
-                errors[next_idx] += err_r * 7 / 16;
-                errors[next_idx + 1] += err_g * 7 / 16;
-                errors[next_idx + 2] += err_b * 7 / 16;
+                // Right pixel (current row)
+                curr_errors[(x + 1) * 3] += err_r * 7 / 16;
+                curr_errors[(x + 1) * 3 + 1] += err_g * 7 / 16;
+                curr_errors[(x + 1) * 3 + 2] += err_b * 7 / 16;
             }
 
             if (y + 1 < height) {
+                // Bottom-left pixel (next row)
                 if (x > 0) {
-                    int next_idx = ((y + 1) * width + (x - 1)) * 3;
-                    errors[next_idx] += err_r * 3 / 16;
-                    errors[next_idx + 1] += err_g * 3 / 16;
-                    errors[next_idx + 2] += err_b * 3 / 16;
+                    next_errors[(x - 1) * 3] += err_r * 3 / 16;
+                    next_errors[(x - 1) * 3 + 1] += err_g * 3 / 16;
+                    next_errors[(x - 1) * 3 + 2] += err_b * 3 / 16;
                 }
 
-                int next_idx = ((y + 1) * width + x) * 3;
-                errors[next_idx] += err_r * 5 / 16;
-                errors[next_idx + 1] += err_g * 5 / 16;
-                errors[next_idx + 2] += err_b * 5 / 16;
+                // Bottom pixel (next row)
+                next_errors[x * 3] += err_r * 5 / 16;
+                next_errors[x * 3 + 1] += err_g * 5 / 16;
+                next_errors[x * 3 + 2] += err_b * 5 / 16;
 
+                // Bottom-right pixel (next row)
                 if (x + 1 < width) {
-                    next_idx = ((y + 1) * width + (x + 1)) * 3;
-                    errors[next_idx] += err_r * 1 / 16;
-                    errors[next_idx + 1] += err_g * 1 / 16;
-                    errors[next_idx + 2] += err_b * 1 / 16;
+                    next_errors[(x + 1) * 3] += err_r * 1 / 16;
+                    next_errors[(x + 1) * 3 + 1] += err_g * 1 / 16;
+                    next_errors[(x + 1) * 3 + 2] += err_b * 1 / 16;
                 }
             }
         }
+
+        // Swap error buffers for next row
+        int *temp = curr_errors;
+        curr_errors = next_errors;
+        next_errors = temp;
+        memset(next_errors, 0, width * 3 * sizeof(int));
     }
 
-    free(errors);
+    free(curr_errors);
+    free(next_errors);
 }
 
 esp_err_t image_processor_init(void)
@@ -145,25 +162,46 @@ static uint8_t *resize_image(uint8_t *src, int src_w, int src_h, int dst_w, int 
         return NULL;
     }
 
-    memset(dst, 255, dst_w * dst_h * 3);
+    // Cover mode: scale to fill entire display, crop excess
+    // Use max scale to ensure image covers the entire display
+    float scale_x = (float) dst_w / src_w;
+    float scale_y = (float) dst_h / src_h;
+    float scale = fmaxf(scale_x, scale_y);
 
-    float scale = fminf((float) dst_w / src_w, (float) dst_h / src_h);
-    int new_w = (int) (src_w * scale);
-    int new_h = (int) (src_h * scale);
-    int offset_x = (dst_w - new_w) / 2;
-    int offset_y = (dst_h - new_h) / 2;
+    int scaled_w = (int) (src_w * scale);
+    int scaled_h = (int) (src_h * scale);
 
-    for (int y = 0; y < new_h; y++) {
-        for (int x = 0; x < new_w; x++) {
-            int src_x = (int) (x / scale);
-            int src_y = (int) (y / scale);
+    // Calculate crop offsets in scaled space to center the image
+    int offset_x = (scaled_w - dst_w) / 2;
+    int offset_y = (scaled_h - dst_h) / 2;
 
+    ESP_LOGI(TAG, "Cover mode resize: %dx%d -> scale %.2f -> %dx%d, offset (%d,%d)", src_w, src_h,
+             scale, scaled_w, scaled_h, offset_x, offset_y);
+
+    for (int y = 0; y < dst_h; y++) {
+        for (int x = 0; x < dst_w; x++) {
+            // Map destination pixel to scaled space, then back to source
+            float scaled_x = x + offset_x;
+            float scaled_y = y + offset_y;
+
+            // Map from scaled space to source space
+            float src_x_f = scaled_x / scale;
+            float src_y_f = scaled_y / scale;
+
+            int src_x = (int) src_x_f;
+            int src_y = (int) src_y_f;
+
+            // Clamp to source bounds
             if (src_x >= src_w)
                 src_x = src_w - 1;
             if (src_y >= src_h)
                 src_y = src_h - 1;
+            if (src_x < 0)
+                src_x = 0;
+            if (src_y < 0)
+                src_y = 0;
 
-            int dst_idx = ((y + offset_y) * dst_w + (x + offset_x)) * 3;
+            int dst_idx = (y * dst_w + x) * 3;
             int src_idx = (src_y * src_w + src_x) * 3;
 
             dst[dst_idx] = src[src_idx];
@@ -377,6 +415,10 @@ esp_err_t image_processor_convert_jpg_to_bmp(const char *jpg_path, const char *b
             final_image = rotated;
             final_width = outimg.height;  // Swapped
             final_height = outimg.width;  // Swapped
+
+            // Free original buffer immediately after rotation
+            free(rgb_buffer);
+            rgb_buffer = NULL;
         } else {
             ESP_LOGE(TAG, "Failed to allocate rotation buffer, using original orientation");
         }
@@ -420,7 +462,11 @@ esp_err_t image_processor_convert_jpg_to_bmp(const char *jpg_path, const char *b
     } else if (rotated) {
         free(rotated);
     }
-    free(rgb_buffer);
+
+    // Free rgb_buffer if not already freed (only freed early if rotation succeeded)
+    if (rgb_buffer) {
+        free(rgb_buffer);
+    }
 
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "Successfully converted %s to %s", jpg_path, bmp_path);

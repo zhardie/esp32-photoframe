@@ -102,6 +102,84 @@ HTTP Status: `503 Service Unavailable`
 
 ---
 
+### `POST /api/display-image`
+
+Upload and display a JPEG image directly (for automation/integration).
+
+**Request:** 
+- Content-Type: `image/jpeg`
+- Body: Raw JPEG image data (max 5MB)
+
+**Processing:**
+1. Receives raw JPEG data
+2. Saves to temporary file
+3. Decodes JPEG and validates dimensions
+4. If portrait (height > width): rotates 90° clockwise
+5. If dimensions don't match 800×480: applies cover mode scaling
+   - Scales to fill entire display (maintains aspect ratio)
+   - Center-crops any excess
+6. Applies enhanced processing (S-curve tone mapping, dithering)
+7. Displays on e-paper immediately
+8. Cleans up temporary files
+
+**Response (Success):**
+```json
+{
+  "status": "success",
+  "message": "Image displayed successfully"
+}
+```
+
+**Response (Busy):**
+```json
+{
+  "status": "busy",
+  "message": "Display is currently updating, please wait"
+}
+```
+HTTP Status: `503 Service Unavailable`
+
+**Example Usage:**
+
+**curl:**
+```bash
+curl -X POST \
+  -H "Content-Type: image/jpeg" \
+  --data-binary @photo.jpg \
+  http://photoframe.local/api/display-image
+```
+
+**Python:**
+```python
+import requests
+
+with open('photo.jpg', 'rb') as f:
+    response = requests.post(
+        'http://photoframe.local/api/display-image',
+        data=f,
+        headers={'Content-Type': 'image/jpeg'}
+    )
+    print(response.json())
+```
+
+**Home Assistant (REST Command):**
+```yaml
+rest_command:
+  photoframe_display:
+    url: "http://photoframe.local/api/display-image"
+    method: POST
+    content_type: "image/jpeg"
+    payload: "{{ image_data }}"
+```
+
+**Note:** 
+- This endpoint is designed for automation and integration use cases
+- Image is processed with the enhanced algorithm (S-curve tone mapping, dithering)
+- Display operation takes ~30-40 seconds
+- Concurrent requests are rejected while display is busy
+
+---
+
 ### `POST /api/delete`
 
 Delete an image and its thumbnail.

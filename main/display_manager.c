@@ -96,17 +96,15 @@ esp_err_t display_manager_show_image(const char *filename)
         return ESP_FAIL;
     }
 
-    char filepath[256];
-    snprintf(filepath, sizeof(filepath), "%s/%s", IMAGE_DIRECTORY, filename);
-
-    ESP_LOGI(TAG, "Displaying image: %s", filepath);
+    // Expect absolute path from caller
+    ESP_LOGI(TAG, "Displaying image: %s", filename);
     ESP_LOGI(TAG, "Free heap before display: %lu bytes", esp_get_free_heap_size());
 
     ESP_LOGI(TAG, "Clearing display buffer");
     Paint_Clear(EPD_7IN3E_WHITE);
 
     ESP_LOGI(TAG, "Reading BMP file into buffer");
-    if (GUI_ReadBmp_RGB_6Color(filepath, 0, 0) != 0) {
+    if (GUI_ReadBmp_RGB_6Color(filename, 0, 0) != 0) {
         ESP_LOGE(TAG, "Failed to read BMP file");
         xSemaphoreGive(display_mutex);
         return ESP_FAIL;
@@ -241,7 +239,7 @@ void display_manager_handle_timer_wakeup(void)
         return;
     }
 
-    // Build image list
+    // Build image list with absolute paths
     char **image_list = malloc(image_count * sizeof(char *));
     rewinddir(dir);
     int idx = 0;
@@ -254,7 +252,11 @@ void display_manager_handle_timer_wakeup(void)
 
             const char *ext = strrchr(entry->d_name, '.');
             if (ext && (strcmp(ext, ".bmp") == 0 || strcmp(ext, ".BMP") == 0)) {
-                image_list[idx] = strdup(entry->d_name);
+                // Build absolute path (IMAGE_DIRECTORY is 14 chars + "/" + 255 max filename + null
+                // = 271)
+                char *fullpath = malloc(512);
+                snprintf(fullpath, 512, "%s/%s", IMAGE_DIRECTORY, entry->d_name);
+                image_list[idx] = fullpath;
                 idx++;
             }
         }
