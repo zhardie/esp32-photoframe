@@ -16,13 +16,13 @@ async function loadBatteryStatus() {
         
         const batteryDiv = document.getElementById('batteryStatus');
         
-        if (!data.connected) {
+        if (!data.battery_connected) {
             batteryDiv.innerHTML = '<span class="battery-disconnected">🔌 No Battery</span>';
             return;
         }
         
-        const percent = data.percent;
-        const voltage = data.voltage;
+        const percent = data.battery_percent;
+        const voltage = data.battery_voltage_mv;
         const charging = data.charging;
         
         let batteryIcon = '🔋';

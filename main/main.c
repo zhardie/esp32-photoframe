@@ -218,11 +218,7 @@ void app_main(void)
         // Go directly back to sleep without starting WiFi or HTTP server
         // Need to reschedule auto-rotate timer if enabled (RTC timer is one-shot)
         ESP_LOGI(TAG, "Manual rotation complete, going back to sleep");
-        if (display_manager_get_auto_rotate()) {
-            power_manager_enter_sleep_with_timer(display_manager_get_rotate_interval());
-        } else {
-            power_manager_enter_sleep();
-        }
+        power_manager_trigger_sleep();
         // Won't reach here after sleep
     } else if (power_manager_is_boot_button_wakeup()) {
         ESP_LOGI(TAG, "BOOT button wakeup detected - starting WiFi and HTTP server");

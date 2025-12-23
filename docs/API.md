@@ -249,23 +249,129 @@ Update configuration.
 
 ### `GET /api/battery`
 
-Get current battery status.
+Get current battery status from AXP2101 power management IC.
 
 **Response:**
 ```json
 {
-  "connected": true,
-  "percent": 85,
-  "voltage": 3950,
-  "charging": false
+  "battery_voltage_mv": 4100,
+  "battery_percent": 85,
+  "charging": false,
+  "usb_connected": true,
+  "battery_connected": true
 }
 ```
 
 **Fields:**
-- `connected`: Whether battery is connected (boolean)
-- `percent`: Battery percentage 0-100, or -1 if not connected
-- `voltage`: Battery voltage in millivolts (mV)
+- `battery_voltage_mv`: Battery voltage in millivolts (mV)
+- `battery_percent`: Battery percentage 0-100
 - `charging`: Whether battery is currently charging (boolean)
+- `usb_connected`: Whether USB power is connected (boolean)
+- `battery_connected`: Whether battery is physically connected (boolean)
+
+**Example Usage:**
+
+**curl:**
+```bash
+curl http://photoframe.local/api/battery
+```
+
+**Python:**
+```python
+import requests
+
+response = requests.get('http://photoframe.local/api/battery')
+battery = response.json()
+print(f"Battery: {battery['battery_percent']}% ({battery['battery_voltage_mv']}mV)")
+print(f"Charging: {battery['charging']}, USB: {battery['usb_connected']}")
+```
+
+**Home Assistant (REST Sensor):**
+```yaml
+sensor:
+  - platform: rest
+    name: "PhotoFrame Battery"
+    resource: "http://photoframe.local/api/battery"
+    method: GET
+    value_template: "{{ value_json.battery_percent }}"
+    unit_of_measurement: "%"
+    json_attributes:
+      - battery_voltage_mv
+      - charging
+      - usb_connected
+      - battery_connected
+    scan_interval: 300  # Update every 5 minutes
+```
+
+---
+
+### `POST /api/sleep`
+
+Trigger device to enter deep sleep mode immediately.
+
+**Request:**
+```json
+{}
+```
+
+No request body required (can be empty JSON or omitted).
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Entering sleep mode"
+}
+```
+
+**Behavior:**
+- Device will send HTTP response, then enter deep sleep after 500ms
+- In deep sleep, power consumption is ~100µA
+- Wake-up behavior depends on auto-rotate configuration:
+  - **If auto-rotate is enabled**: Device will wake up after the configured rotation interval
+  - **If auto-rotate is disabled**: Device will sleep indefinitely until manually woken
+- Device can always be woken by:
+  - Boot button press (GPIO 0)
+  - Key button press (GPIO 21)
+  - BLE wake-up (if BLE wake mode is enabled)
+
+**Example Usage:**
+
+**curl:**
+```bash
+curl -X POST http://photoframe.local/api/sleep
+```
+
+**Python:**
+```python
+import requests
+
+response = requests.post('http://photoframe.local/api/sleep')
+print(response.json())
+```
+
+**Home Assistant (REST Command):**
+```yaml
+rest_command:
+  photoframe_sleep:
+    url: "http://photoframe.local/api/sleep"
+    method: POST
+
+# Usage in automation:
+automation:
+  - alias: "PhotoFrame sleep at night"
+    trigger:
+      - platform: time
+        at: "23:00:00"
+    action:
+      - service: rest_command.photoframe_sleep
+```
+
+**Note:** 
+- Useful for battery conservation when photoframe is not needed
+- Can be integrated with home automation to sleep during certain hours
+- Device will disconnect from WiFi during sleep
+- To control wake-up timing, configure auto-rotate settings via `/api/config`
 
 ---
 

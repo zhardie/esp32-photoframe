@@ -198,6 +198,18 @@ void power_manager_enter_sleep_with_timer(uint32_t sleep_time_sec)
     esp_deep_sleep_start();
 }
 
+void power_manager_trigger_sleep(void)
+{
+    ESP_LOGI(TAG, "Sleep triggered");
+
+    // Check if auto-rotate is enabled and use its interval for wake-up
+    if (display_manager_get_auto_rotate()) {
+        power_manager_enter_sleep_with_timer(display_manager_get_rotate_interval());
+    } else {
+        power_manager_enter_sleep();
+    }
+}
+
 void power_manager_reset_sleep_timer(void)
 {
     sleep_countdown = AUTO_SLEEP_TIMEOUT_SEC;

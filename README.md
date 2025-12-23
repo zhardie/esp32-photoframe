@@ -159,14 +159,7 @@ On first boot, the device automatically starts in **WiFi provisioning mode** if 
 
 ### RESTful API
 
-Complete API documentation is available in **[API.md](API.md)**.
-
-Key endpoints:
-- `GET /api/images` - List all images
-- `POST /api/upload` - Upload and process JPEG images
-- `POST /api/display` - Display an image on e-paper
-- `GET /api/config` - Get/set configuration (rotation, brightness, contrast)
-- `GET /api/battery` - Get battery status
+Complete API documentation is available in **[API.md](docs/API.md)**.
 
 ## Troubleshooting
 
