@@ -320,7 +320,7 @@ footer {
     gap: 30px;
     justify-content: center;
     align-items: flex-start;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 
 .preview-canvas-wrapper {
