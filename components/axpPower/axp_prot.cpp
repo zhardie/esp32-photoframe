@@ -73,9 +73,9 @@ void axp_cmd_init(void) {
         axp2101.setChargingLedMode(XPOWERS_CHG_LED_OFF);
         ESP_LOGW("axp2101_init_log","Disable the CHGLED function.");
     }
-    if(axp2101.getChargeTargetVoltage() != XPOWERS_AXP2101_CHG_VOL_4V1) {
-        axp2101.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V1);
-        ESP_LOGW("axp2101_init_log","Set the full charge voltage of the battery to 4.1V.");
+    if(axp2101.getChargeTargetVoltage() != XPOWERS_AXP2101_CHG_VOL_4V2) {
+        axp2101.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2);
+        ESP_LOGW("axp2101_init_log","Set the full charge voltage of the battery to 4.2V.");
     }
     if(axp2101.getButtonBatteryVoltage() != 3300) {
         axp2101.setButtonBatteryChargeVoltage(3300);
