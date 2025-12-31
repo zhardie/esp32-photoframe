@@ -312,7 +312,7 @@ async function processFolderStructure(
       const inputPath = path.join(albumInputPath, imageFile);
       const baseName = path.basename(imageFile, path.extname(imageFile));
       const outputBmp = path.join(albumOutputPath, `${baseName}.bmp`);
-      const outputThumb = options.thumbnail
+      const outputThumb = options.generateThumbnail
         ? path.join(albumOutputPath, `${baseName}.jpg`)
         : null;
 
