@@ -58,4 +58,7 @@ const char *config_manager_get_http_header_key(void);
 void config_manager_set_http_header_value(const char *value);
 const char *config_manager_get_http_header_value(void);
 
+void config_manager_set_processing_settings(const char *json);
+const char *config_manager_get_processing_settings(void);
+
 #endif

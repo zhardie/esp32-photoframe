@@ -231,6 +231,70 @@
             margin-top: 30px;
         }
 
+        /* Preset Selector */
+        .preset-selector {
+            background: white;
+            border: 3px solid #667eea;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 0 auto 25px;
+            max-width: 900px;
+            text-align: center;
+        }
+
+        .preset-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .preset-options-horizontal {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .preset-option-horizontal {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 0.95rem;
+            color: #333;
+            transition: color 0.3s ease;
+        }
+
+        .preset-option-horizontal:hover {
+            color: #667eea;
+        }
+
+        .preset-option-horizontal input[type="radio"] {
+            margin-right: 8px;
+            cursor: pointer;
+            width: 18px;
+            height: 18px;
+            accent-color: #667eea;
+        }
+
+        .preset-option-horizontal input[type="radio"]:checked + span {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .preset-hint {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .preset-hint small {
+            font-size: 0.85rem;
+            color: #666;
+            line-height: 1.4;
+        }
+
         .comparison-container {
             position: relative;
         }
@@ -244,21 +308,23 @@
         .canvas-container {
             position: relative;
             display: inline-block;
-        }
-
-        #stockCanvas, #enhancedCanvas {
-            display: block;
-            max-width: 100%;
-            height: auto;
             border: 2px solid #667eea;
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
 
+        #enhancedCanvas {
+            display: block;
+            position: relative;
+            z-index: 1;
+        }
+
         #stockCanvas {
+            display: block;
             position: absolute;
             top: 0;
             left: 0;
+            z-index: 2;
             clip-path: inset(0 70% 0 0);
         }
 
@@ -538,6 +604,7 @@
                 <p style="text-align: center; max-width: 900px; margin: 0 auto 30px; color: #555; line-height: 1.6;">
                     The stock algorithm uses theoretical RGB values that may look acceptable on computer displays, but when flashed onto the actual e-paper device, the colors appear washed out and image quality is significantly degraded. Our enhanced algorithm uses measured palette dithering for superior e-paper display quality.
                 </p>
+                
                 <div style="display: flex; gap: 30px; justify-content: center; align-items: flex-start; flex-wrap: wrap; margin-bottom: 20px;">
                     <div class="comparison-container" style="flex: 0 0 auto; padding: 0; background: transparent;">
                         <h3 style="text-align: center; margin-bottom: 15px; color: #333;">
@@ -611,6 +678,28 @@
                     </div>
                 </div>
 
+                <!-- Preset Selection -->
+                <div class="preset-selector">
+                    <div class="preset-title">Processing Preset</div>
+                    <div class="preset-options-horizontal">
+                        <label class="preset-option-horizontal">
+                            <input type="radio" name="preset" value="cdr" checked>
+                            <span>Compressed Dynamic Range</span>
+                        </label>
+                        <label class="preset-option-horizontal">
+                            <input type="radio" name="preset" value="scurve">
+                            <span>S-Curve</span>
+                        </label>
+                        <label class="preset-option-horizontal">
+                            <input type="radio" name="preset" value="custom">
+                            <span>Custom</span>
+                        </label>
+                    </div>
+                    <div class="preset-hint">
+                        <small id="presetHintText">Prevents overexposure and generates good image quality for all images. Images will have a slightly darker look.</small>
+                    </div>
+                </div>
+
                 <div id="controlsGrid">
                     <!-- Row 1: Color Matching Method & Dithering Algorithm -->
                     <div class="controls-grid" style="margin-bottom: 20px;">
@@ -649,6 +738,14 @@
                                 </label>
                             </div>
                             <small>Note: Stock mode always uses Floyd-Steinberg</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="compressDynamicRange" checked style="margin-right: 5px;">
+                                Compress Dynamic Range
+                            </label>
+                            <small>Map brightness range to display's actual white point to prevent overexposure</small>
                         </div>
                     </div>
                     
@@ -883,26 +980,19 @@
         getLatestRelease();
 
         // Demo functionality
-        import { processImage, getCanvasContext } from './image-processor.js';
+        import { processImage, getCanvasContext, getPreset } from './image-processor.js';
 
         let currentImageFile = null;
-        let originalImageData = null;
+        let sourceCanvas = null;  // Store as canvas instead of ImageData
         let sliderPosition = 0.3;
         let isDragging = false;
+        let currentPreset = 'cdr';
 
+        // Initialize with CDR preset
+        const defaultPreset = getPreset('cdr');
         const enhancedParams = {
-            exposure: 1.0,
-            saturation: 1.3,
-            toneMode: 'scurve',
-            contrast: 1.0,
-            strength: 0.9,
-            shadowBoost: 0.0,
-            highlightCompress: 1.5,
-            midpoint: 0.5,
-            colorMethod: 'rgb',
-            renderMeasured: true,
-            processingMode: 'enhanced',
-            ditherAlgorithm: 'floyd-steinberg'
+            ...defaultPreset,
+            renderMeasured: true
         };
 
         const stockParams = {
@@ -1023,29 +1113,12 @@
 
             try {
                 const img = await loadImage(file);
-                const isPortrait = img.height > img.width;
-
-                const width = isPortrait ? 480 : 800;
-                const height = isPortrait ? 800 : 480;
-
-                stockCanvas.width = width;
-                stockCanvas.height = height;
-                enhancedCanvas.width = width;
-                enhancedCanvas.height = height;
-
-                const ctx = getCanvasContext(stockCanvas, '2d', { willReadFrequently: true });
-                const scaleX = width / img.width;
-                const scaleY = height / img.height;
-                const scale = Math.max(scaleX, scaleY);
-
-                const scaledWidth = img.width * scale;
-                const scaledHeight = img.height * scale;
-                const offsetX = (width - scaledWidth) / 2;
-                const offsetY = (height - scaledHeight) / 2;
-
-                ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
-
-                originalImageData = ctx.getImageData(0, 0, width, height);
+                // Store as canvas (matches webapp behavior)
+                sourceCanvas = document.createElement('canvas');
+                sourceCanvas.width = img.width;
+                sourceCanvas.height = img.height;
+                const sourceCtx = getCanvasContext(sourceCanvas);
+                sourceCtx.drawImage(img, 0, 0);
 
                 updatePreviews();
             } catch (error) {
@@ -1124,32 +1197,21 @@
         }
 
         function updatePreviews() {
-            if (!originalImageData) return;
+            if (!sourceCanvas) return;
 
             drawCurveVisualization();
 
-            // Create a temporary canvas with the original image data
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = originalImageData.width;
-            tempCanvas.height = originalImageData.height;
-            const tempCtx = getCanvasContext(tempCanvas);
-            tempCtx.putImageData(originalImageData, 0, 0);
-
-            // Determine target dimensions based on orientation
-            const isPortrait = tempCanvas.height > tempCanvas.width;
-            const targetWidth = isPortrait ? 480 : 800;
-            const targetHeight = isPortrait ? 800 : 480;
-
-            // Process enhanced version (with tone mapping and measured palette)
+            // Always pass landscape dimensions - processImage will handle orientation
+            // This matches the webapp behavior exactly
             const { canvas: enhancedProcessed } = processImage(
-                tempCanvas,
+                sourceCanvas,
                 enhancedParams,
                 null, // no custom palette
                 {
                     verbose: false,
                     skipRotation: true, // Don't rotate in browser preview
-                    targetWidth: targetWidth,
-                    targetHeight: targetHeight,
+                    targetWidth: 800,
+                    targetHeight: 480,
                 }
             );
 
@@ -1162,14 +1224,14 @@
 
             // Process stock version (no tone mapping, theoretical palette)
             const { canvas: stockProcessed } = processImage(
-                tempCanvas,
+                sourceCanvas,
                 stockParams,
                 null, // no custom palette
                 {
                     verbose: false,
                     skipRotation: true, // Don't rotate in browser preview
-                    targetWidth: targetWidth,
-                    targetHeight: targetHeight,
+                    targetWidth: 800,
+                    targetHeight: 480,
                 }
             );
 
@@ -1187,43 +1249,50 @@
 
         document.getElementById('exposure').addEventListener('input', (e) => {
             enhancedParams.exposure = parseFloat(e.target.value);
-            document.getElementById('exposureValue').textContent = e.target.value;
+            document.getElementById('exposureValue').textContent = parseFloat(e.target.value).toFixed(2);
+            switchToCustomPreset();
             updatePreviews();
         });
 
         document.getElementById('saturation').addEventListener('input', (e) => {
             enhancedParams.saturation = parseFloat(e.target.value);
-            document.getElementById('saturationValue').textContent = e.target.value;
+            document.getElementById('saturationValue').textContent = parseFloat(e.target.value).toFixed(2);
+            switchToCustomPreset();
             updatePreviews();
         });
 
         document.getElementById('contrast').addEventListener('input', (e) => {
             enhancedParams.contrast = parseFloat(e.target.value);
-            document.getElementById('contrastValue').textContent = e.target.value;
+            document.getElementById('contrastValue').textContent = parseFloat(e.target.value).toFixed(2);
+            switchToCustomPreset();
             updatePreviews();
         });
 
         document.getElementById('scurveStrength').addEventListener('input', (e) => {
             enhancedParams.strength = parseFloat(e.target.value);
-            document.getElementById('strengthValue').textContent = e.target.value;
+            document.getElementById('strengthValue').textContent = parseFloat(e.target.value).toFixed(2);
+            switchToCustomPreset();
             updatePreviews();
         });
 
         document.getElementById('scurveShadow').addEventListener('input', (e) => {
             enhancedParams.shadowBoost = parseFloat(e.target.value);
-            document.getElementById('shadowValue').textContent = e.target.value;
+            document.getElementById('shadowValue').textContent = parseFloat(e.target.value).toFixed(2);
+            switchToCustomPreset();
             updatePreviews();
         });
 
         document.getElementById('scurveHighlight').addEventListener('input', (e) => {
             enhancedParams.highlightCompress = parseFloat(e.target.value);
-            document.getElementById('highlightValue').textContent = e.target.value;
+            document.getElementById('highlightValue').textContent = parseFloat(e.target.value).toFixed(2);
+            switchToCustomPreset();
             updatePreviews();
         });
 
         document.getElementById('scurveMidpoint').addEventListener('input', (e) => {
             enhancedParams.midpoint = parseFloat(e.target.value);
-            document.getElementById('midpointValue').textContent = e.target.value;
+            document.getElementById('midpointValue').textContent = parseFloat(e.target.value).toFixed(2);
+            switchToCustomPreset();
             updatePreviews();
         });
 
@@ -1270,45 +1339,134 @@
             });
         });
 
+        // Compress dynamic range checkbox
+        document.getElementById('compressDynamicRange').addEventListener('change', (e) => {
+            enhancedParams.compressDynamicRange = e.target.checked;
+            switchToCustomPreset();
+            updatePreviews();
+        });
+
+        // Preset selection
+        document.querySelectorAll('input[name="preset"]').forEach((radio) => {
+            radio.addEventListener('change', (e) => {
+                const presetName = e.target.value;
+                
+                // Update hint text
+                updatePresetHint(presetName);
+                
+                if (presetName === 'custom') {
+                    currentPreset = 'custom';
+                    return;
+                }
+                
+                // Load preset parameters
+                const preset = getPreset(presetName);
+                if (preset) {
+                    currentPreset = presetName;
+                    Object.assign(enhancedParams, preset);
+                    enhancedParams.renderMeasured = true;
+                    
+                    // Update UI controls
+                    updateUIFromParams();
+                    updatePreviews();
+                }
+            });
+        });
+
+        // Update preset hint text based on selected preset
+        function updatePresetHint(presetName) {
+            const hintText = document.getElementById('presetHintText');
+            const hints = {
+                cdr: 'Prevents overexposure and generates good image quality for all images. Images will have a slightly darker look.',
+                scurve: 'Advanced tone mapping with brighter output. Some parts of the image may be over-exposed.',
+                custom: 'Manually adjusted parameters'
+            };
+            hintText.textContent = hints[presetName] || '';
+        }
+
+        // Helper function to switch to custom preset when user manually adjusts parameters
+        function switchToCustomPreset() {
+            if (currentPreset !== 'custom') {
+                currentPreset = 'custom';
+                document.querySelector('input[name="preset"][value="custom"]').checked = true;
+                updatePresetHint('custom');
+            }
+        }
+
+        // Helper function to update all UI controls from enhancedParams
+        function updateUIFromParams() {
+            // Update sliders and values
+            if (enhancedParams.exposure !== undefined) {
+                document.getElementById('exposure').value = enhancedParams.exposure;
+                document.getElementById('exposureValue').textContent = enhancedParams.exposure.toFixed(2);
+            }
+            if (enhancedParams.saturation !== undefined) {
+                document.getElementById('saturation').value = enhancedParams.saturation;
+                document.getElementById('saturationValue').textContent = enhancedParams.saturation.toFixed(2);
+            }
+            if (enhancedParams.contrast !== undefined) {
+                document.getElementById('contrast').value = enhancedParams.contrast;
+                document.getElementById('contrastValue').textContent = enhancedParams.contrast.toFixed(2);
+            }
+            
+            // S-curve parameters (use defaults if not defined)
+            document.getElementById('scurveStrength').value = enhancedParams.strength || 0.9;
+            document.getElementById('strengthValue').textContent = (enhancedParams.strength || 0.9).toFixed(2);
+            document.getElementById('scurveShadow').value = enhancedParams.shadowBoost || 0.0;
+            document.getElementById('shadowValue').textContent = (enhancedParams.shadowBoost || 0.0).toFixed(2);
+            document.getElementById('scurveHighlight').value = enhancedParams.highlightCompress || 1.5;
+            document.getElementById('highlightValue').textContent = (enhancedParams.highlightCompress || 1.5).toFixed(2);
+            document.getElementById('scurveMidpoint').value = enhancedParams.midpoint || 0.5;
+            document.getElementById('midpointValue').textContent = (enhancedParams.midpoint || 0.5).toFixed(2);
+            
+            // Checkbox
+            if (enhancedParams.compressDynamicRange !== undefined) {
+                document.getElementById('compressDynamicRange').checked = enhancedParams.compressDynamicRange;
+            }
+            
+            // Radio buttons
+            if (enhancedParams.colorMethod) {
+                document.querySelector(`input[name="colorMethod"][value="${enhancedParams.colorMethod}"]`).checked = true;
+            }
+            if (enhancedParams.toneMode) {
+                document.querySelector(`input[name="toneMode"][value="${enhancedParams.toneMode}"]`).checked = true;
+                
+                // Update UI visibility based on tone mode
+                const contrastControl = document.getElementById('contrastControl');
+                const curveWrapper = document.getElementById('curveWrapper');
+                if (enhancedParams.toneMode === 'contrast') {
+                    contrastControl.style.display = 'block';
+                    curveWrapper.style.display = 'none';
+                } else {
+                    contrastControl.style.display = 'none';
+                    curveWrapper.style.display = 'flex';
+                }
+            }
+            if (enhancedParams.ditherAlgorithm) {
+                document.querySelector(`input[name="ditherAlgorithm"][value="${enhancedParams.ditherAlgorithm}"]`).checked = true;
+            }
+        }
+
         document.getElementById('resetParams').addEventListener('click', () => {
-            enhancedParams.exposure = 1.0;
-            enhancedParams.saturation = 1.5;
-            enhancedParams.toneMode = 'scurve';
-            enhancedParams.contrast = 1.0;
-            enhancedParams.strength = 0.9;
-            enhancedParams.shadowBoost = 0.0;
-            enhancedParams.highlightCompress = 1.5;
-            enhancedParams.midpoint = 0.5;
-            enhancedParams.colorMethod = 'rgb';
-            enhancedParams.ditherAlgorithm = 'floyd-steinberg';
-            stockParams.ditherAlgorithm = 'floyd-steinberg';
-
-            document.getElementById('exposure').value = 1.0;
-            document.getElementById('exposureValue').textContent = '1.0';
-            document.getElementById('saturation').value = 1.5;
-            document.getElementById('saturationValue').textContent = '1.5';
-            document.getElementById('contrast').value = 1.0;
-            document.getElementById('contrastValue').textContent = '1.0';
-            document.getElementById('scurveStrength').value = 0.9;
-            document.getElementById('strengthValue').textContent = '0.9';
-            document.getElementById('scurveShadow').value = 0.0;
-            document.getElementById('shadowValue').textContent = '0.0';
-            document.getElementById('scurveHighlight').value = 1.7;
-            document.getElementById('highlightValue').textContent = '1.5';
-            document.getElementById('scurveMidpoint').value = 0.5;
-            document.getElementById('midpointValue').textContent = '0.5';
-            document.querySelector('input[name="colorMethod"][value="rgb"]').checked = true;
-            document.querySelector('input[name="ditherAlgorithm"][value="floyd-steinberg"]').checked = true;
-            document.querySelector('input[name="toneMode"][value="scurve"]').checked = true;
-            document.getElementById('contrastControl').style.display = 'none';
-            document.getElementById('curveWrapper').style.display = 'flex';
-
+            // Load CDR preset from image-processor.js (single source of truth)
+            const cdrPreset = getPreset('cdr');
+            Object.assign(enhancedParams, cdrPreset);
+            
+            // Update preset selection
+            currentPreset = 'cdr';
+            document.querySelector('input[name="preset"][value="cdr"]').checked = true;
+            updatePresetHint('cdr');
+            
+            // Update UI using helper function
+            updateUIFromParams();
+            
+            // Update previews
             updatePreviews();
         });
 
         document.getElementById('newImage').addEventListener('click', () => {
             currentImageFile = null;
-            originalImageData = null;
+            sourceCanvas = null;
             fileInput.value = '';
             document.getElementById('fileName').textContent = '';
             uploadArea.style.display = 'block';
@@ -1332,6 +1490,9 @@
             }
         }
 
+        // Initialize UI with CDR preset parameters
+        updateUIFromParams();
+        
         loadSampleImage();
         
         // Version switching for firmware flasher

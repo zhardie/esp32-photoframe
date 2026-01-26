@@ -20,13 +20,6 @@ typedef struct {
     uint8_t b;
 } rgb_t;
 
-typedef enum {
-    DITHER_FLOYD_STEINBERG,
-    DITHER_STUCKI,
-    DITHER_BURKES,
-    DITHER_SIERRA
-} dither_algorithm_t;
-
 typedef struct {
     int dx;
     int dy;
@@ -97,18 +90,6 @@ static int find_closest_color(uint8_t r, uint8_t g, uint8_t b, const rgb_t *pal)
     }
 
     return closest;
-}
-
-static dither_algorithm_t parse_dither_algorithm(const char *algo_str)
-{
-    if (strcmp(algo_str, "stucki") == 0) {
-        return DITHER_STUCKI;
-    } else if (strcmp(algo_str, "burkes") == 0) {
-        return DITHER_BURKES;
-    } else if (strcmp(algo_str, "sierra") == 0) {
-        return DITHER_SIERRA;
-    }
-    return DITHER_FLOYD_STEINBERG;  // Default
 }
 
 static void apply_error_diffusion_dither(uint8_t *image, int width, int height,
@@ -402,11 +383,12 @@ static esp_err_t write_bmp_file(const char *filename, uint8_t *rgb_data, int wid
 }
 
 esp_err_t image_processor_convert_jpg_to_bmp(const char *jpg_path, const char *bmp_path,
-                                             bool use_stock_mode, const char *dither_algorithm)
+                                             bool use_stock_mode,
+                                             dither_algorithm_t dither_algorithm)
 {
+    const char *algo_names[] = {"floyd-steinberg", "stucki", "burkes", "sierra"};
     ESP_LOGI(TAG, "Converting %s to %s (mode: %s, dither: %s)", jpg_path, bmp_path,
-             use_stock_mode ? "stock" : "enhanced",
-             dither_algorithm ? dither_algorithm : "floyd-steinberg");
+             use_stock_mode ? "stock" : "enhanced", algo_names[dither_algorithm]);
 
     FILE *fp = fopen(jpg_path, "rb");
     if (!fp) {
@@ -660,14 +642,11 @@ esp_err_t image_processor_convert_jpg_to_bmp(const char *jpg_path, const char *b
     // Enhanced mode: use measured palette (accurate error diffusion)
     const rgb_t *dither_palette = use_stock_mode ? palette : palette_measured;
 
-    // Parse dithering algorithm
-    dither_algorithm_t algo =
-        parse_dither_algorithm(dither_algorithm ? dither_algorithm : "floyd-steinberg");
-    const char *algo_name = dither_algorithm ? dither_algorithm : "floyd-steinberg";
-
-    ESP_LOGI(TAG, "Applying %s dithering with %s palette", algo_name,
+    // Use dithering algorithm directly (already an enum)
+    ESP_LOGI(TAG, "Applying %s dithering with %s palette", algo_names[dither_algorithm],
              use_stock_mode ? "theoretical" : "measured");
-    apply_error_diffusion_dither(final_image, final_width, final_height, dither_palette, algo);
+    apply_error_diffusion_dither(final_image, final_width, final_height, dither_palette,
+                                 dither_algorithm);
 
     // Write BMP file
     ESP_LOGI(TAG, "Writing BMP file");

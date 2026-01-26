@@ -24,7 +24,6 @@
 #include "mdns_service.h"
 #include "ota_manager.h"
 #include "power_manager.h"
-#include "processing_settings.h"
 #include "shtc3_sensor.h"
 #include "utils.h"
 
@@ -786,12 +785,6 @@ static esp_err_t display_image_direct_handler(httpd_req_t *req)
         const char *temp_jpg_path = CURRENT_JPG_PATH;
         const char *display_path = NULL;
 
-        // Load processing settings to get dithering algorithm
-        processing_settings_t proc_settings;
-        if (processing_settings_load(&proc_settings) != ESP_OK) {
-            processing_settings_get_defaults(&proc_settings);
-        }
-
         // Process the uploaded image
         if (upload_is_png) {
             unlink(temp_png_path);
@@ -818,7 +811,7 @@ static esp_err_t display_image_direct_handler(httpd_req_t *req)
         } else {
             // Assume JPEG, convert to BMP
             err = image_processor_convert_jpg_to_bmp(result.image_path, temp_bmp_path, false,
-                                                     proc_settings.dither_algorithm);
+                                                     get_dithering_algorithm_from_settings());
             unlink(result.image_path);
             if (err != ESP_OK) {
                 if (result.has_thumbnail)
@@ -942,12 +935,6 @@ static esp_err_t display_image_direct_handler(httpd_req_t *req)
 
     ESP_LOGI(TAG, "Image received successfully, processing...");
 
-    // Load processing settings to get dithering algorithm
-    processing_settings_t proc_settings;
-    if (processing_settings_load(&proc_settings) != ESP_OK) {
-        processing_settings_get_defaults(&proc_settings);
-    }
-
     esp_err_t err = ESP_OK;
     const char *display_path = NULL;
 
@@ -973,7 +960,7 @@ static esp_err_t display_image_direct_handler(httpd_req_t *req)
     } else {
         // Convert JPG to BMP using image processor
         err = image_processor_convert_jpg_to_bmp(temp_upload_path, temp_bmp_path, false,
-                                                 proc_settings.dither_algorithm);
+                                                 get_dithering_algorithm_from_settings());
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "Failed to convert JPG to BMP: %s", esp_err_to_name(err));
             unlink(temp_upload_path);
@@ -993,6 +980,7 @@ static esp_err_t display_image_direct_handler(httpd_req_t *req)
             }
             return ESP_FAIL;
         }
+        unlink(temp_upload_path);
         display_path = temp_bmp_path;
     }
 
@@ -1939,30 +1927,15 @@ static esp_err_t display_calibration_handler(httpd_req_t *req)
 static esp_err_t processing_settings_handler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET) {
-        processing_settings_t settings;
-        if (processing_settings_load(&settings) != ESP_OK) {
-            processing_settings_get_defaults(&settings);
+        const char *settings_json = config_manager_get_processing_settings();
+
+        if (settings_json == NULL || strlen(settings_json) == 0) {
+            httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Processing settings not configured");
+            return ESP_FAIL;
         }
 
-        cJSON *response = cJSON_CreateObject();
-        cJSON_AddNumberToObject(response, "exposure", settings.exposure);
-        cJSON_AddNumberToObject(response, "saturation", settings.saturation);
-        cJSON_AddStringToObject(response, "toneMode", settings.tone_mode);
-        cJSON_AddNumberToObject(response, "contrast", settings.contrast);
-        cJSON_AddNumberToObject(response, "strength", settings.strength);
-        cJSON_AddNumberToObject(response, "shadowBoost", settings.shadow_boost);
-        cJSON_AddNumberToObject(response, "highlightCompress", settings.highlight_compress);
-        cJSON_AddNumberToObject(response, "midpoint", settings.midpoint);
-        cJSON_AddStringToObject(response, "colorMethod", settings.color_method);
-        cJSON_AddStringToObject(response, "processingMode", settings.processing_mode);
-        cJSON_AddStringToObject(response, "ditherAlgorithm", settings.dither_algorithm);
-
-        char *json_str = cJSON_Print(response);
         httpd_resp_set_type(req, "application/json");
-        httpd_resp_sendstr(req, json_str);
-
-        free(json_str);
-        cJSON_Delete(response);
+        httpd_resp_sendstr(req, settings_json);
         return ESP_OK;
 
     } else if (req->method == HTTP_POST) {
@@ -1980,98 +1953,21 @@ static esp_err_t processing_settings_handler(httpd_req_t *req)
         }
         buf[ret] = '\0';
 
+        // Validate JSON
         cJSON *json = cJSON_Parse(buf);
-        heap_caps_free(buf);
-
         if (!json) {
+            heap_caps_free(buf);
             httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
             return ESP_FAIL;
         }
-
-        processing_settings_t settings;
-        processing_settings_get_defaults(&settings);
-
-        cJSON *item;
-        if ((item = cJSON_GetObjectItem(json, "exposure")) && cJSON_IsNumber(item)) {
-            settings.exposure = (float) item->valuedouble;
-        }
-        if ((item = cJSON_GetObjectItem(json, "saturation")) && cJSON_IsNumber(item)) {
-            settings.saturation = (float) item->valuedouble;
-        }
-        if ((item = cJSON_GetObjectItem(json, "toneMode")) && cJSON_IsString(item)) {
-            strncpy(settings.tone_mode, item->valuestring, sizeof(settings.tone_mode) - 1);
-        }
-        if ((item = cJSON_GetObjectItem(json, "contrast")) && cJSON_IsNumber(item)) {
-            settings.contrast = (float) item->valuedouble;
-        }
-        if ((item = cJSON_GetObjectItem(json, "strength")) && cJSON_IsNumber(item)) {
-            settings.strength = (float) item->valuedouble;
-        }
-        if ((item = cJSON_GetObjectItem(json, "shadowBoost")) && cJSON_IsNumber(item)) {
-            settings.shadow_boost = (float) item->valuedouble;
-        }
-        if ((item = cJSON_GetObjectItem(json, "highlightCompress")) && cJSON_IsNumber(item)) {
-            settings.highlight_compress = (float) item->valuedouble;
-        }
-        if ((item = cJSON_GetObjectItem(json, "midpoint")) && cJSON_IsNumber(item)) {
-            settings.midpoint = (float) item->valuedouble;
-        }
-        if ((item = cJSON_GetObjectItem(json, "colorMethod")) && cJSON_IsString(item)) {
-            strncpy(settings.color_method, item->valuestring, sizeof(settings.color_method) - 1);
-        }
-        if ((item = cJSON_GetObjectItem(json, "processingMode")) && cJSON_IsString(item)) {
-            strncpy(settings.processing_mode, item->valuestring,
-                    sizeof(settings.processing_mode) - 1);
-        }
-        if ((item = cJSON_GetObjectItem(json, "ditherAlgorithm")) && cJSON_IsString(item)) {
-            strncpy(settings.dither_algorithm, item->valuestring,
-                    sizeof(settings.dither_algorithm) - 1);
-        }
-
         cJSON_Delete(json);
 
-        esp_err_t err = processing_settings_save(&settings);
-        if (err != ESP_OK) {
-            httpd_resp_send_500(req);
-            return ESP_FAIL;
-        }
+        // Save JSON string directly to config manager
+        config_manager_set_processing_settings(buf);
+        heap_caps_free(buf);
 
         httpd_resp_set_type(req, "application/json");
         httpd_resp_sendstr(req, "{\"success\":true}");
-        return ESP_OK;
-
-    } else if (req->method == HTTP_DELETE) {
-        // Reset to firmware defaults
-        processing_settings_t settings;
-        processing_settings_get_defaults(&settings);
-
-        // Save defaults to NVS
-        esp_err_t err = processing_settings_save(&settings);
-        if (err != ESP_OK) {
-            httpd_resp_send_500(req);
-            return ESP_FAIL;
-        }
-
-        // Return the default values
-        cJSON *response = cJSON_CreateObject();
-        cJSON_AddNumberToObject(response, "exposure", settings.exposure);
-        cJSON_AddNumberToObject(response, "saturation", settings.saturation);
-        cJSON_AddStringToObject(response, "toneMode", settings.tone_mode);
-        cJSON_AddNumberToObject(response, "contrast", settings.contrast);
-        cJSON_AddNumberToObject(response, "strength", settings.strength);
-        cJSON_AddNumberToObject(response, "shadowBoost", settings.shadow_boost);
-        cJSON_AddNumberToObject(response, "highlightCompress", settings.highlight_compress);
-        cJSON_AddNumberToObject(response, "midpoint", settings.midpoint);
-        cJSON_AddStringToObject(response, "colorMethod", settings.color_method);
-        cJSON_AddStringToObject(response, "processingMode", settings.processing_mode);
-        cJSON_AddStringToObject(response, "ditherAlgorithm", settings.dither_algorithm);
-
-        char *json_str = cJSON_Print(response);
-        httpd_resp_set_type(req, "application/json");
-        httpd_resp_sendstr(req, json_str);
-
-        free(json_str);
-        cJSON_Delete(response);
         return ESP_OK;
     }
 
@@ -2421,12 +2317,6 @@ esp_err_t http_server_init(void)
                                                     .handler = processing_settings_handler,
                                                     .user_ctx = NULL};
         httpd_register_uri_handler(server, &processing_settings_post_uri);
-
-        httpd_uri_t processing_settings_delete_uri = {.uri = "/api/settings/processing",
-                                                      .method = HTTP_DELETE,
-                                                      .handler = processing_settings_handler,
-                                                      .user_ctx = NULL};
-        httpd_register_uri_handler(server, &processing_settings_delete_uri);
 
         httpd_uri_t color_palette_get_uri = {.uri = "/api/settings/palette",
                                              .method = HTTP_GET,

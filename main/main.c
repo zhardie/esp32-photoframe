@@ -30,7 +30,6 @@
 #include "pcf85063_rtc.h"
 #include "periodic_tasks.h"
 #include "power_manager.h"
-#include "processing_settings.h"
 #include "sdmmc_cmd.h"
 #include "shtc3_sensor.h"
 #include "utils.h"
@@ -426,8 +425,6 @@ void app_main(void)
     ESP_ERROR_CHECK(image_processor_init());
 
     ESP_ERROR_CHECK(display_manager_init());
-
-    ESP_ERROR_CHECK(processing_settings_init());
 
     ESP_ERROR_CHECK(color_palette_init());
 

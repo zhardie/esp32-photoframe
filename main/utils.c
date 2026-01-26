@@ -14,7 +14,6 @@
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "image_processor.h"
-#include "processing_settings.h"
 
 static const char *TAG = "utils";
 
@@ -218,15 +217,9 @@ esp_err_t fetch_and_save_image_from_url(const char *url, char *saved_bmp_path, s
         err = ESP_OK;  // PNG move succeeded
         ESP_LOGI(TAG, "PNG saved: %s", temp_png_path);
     } else if (upload_is_jpeg) {
-        // Load processing settings to get dithering algorithm
-        processing_settings_t proc_settings;
-        if (processing_settings_load(&proc_settings) != ESP_OK) {
-            processing_settings_get_defaults(&proc_settings);
-        }
-
         // Convert the upload from JPG to BMP
         err = image_processor_convert_jpg_to_bmp(temp_upload_path, temp_bmp_path, false,
-                                                 proc_settings.dither_algorithm);
+                                                 get_dithering_algorithm_from_settings());
         final_path = temp_bmp_path;
     } else {
         // Unknown format
@@ -632,4 +625,37 @@ void sanitize_hostname(const char *device_name, char *hostname, size_t max_len)
         strncpy(hostname, "photoframe", max_len - 1);
         hostname[max_len - 1] = '\0';
     }
+}
+
+dither_algorithm_t get_dithering_algorithm_from_settings(void)
+{
+    const char *settings_json = config_manager_get_processing_settings();
+
+    if (settings_json && strlen(settings_json) > 0) {
+        cJSON *json = cJSON_Parse(settings_json);
+        if (json) {
+            cJSON *dither_item = cJSON_GetObjectItem(json, "ditherAlgorithm");
+            if (dither_item && cJSON_IsString(dither_item)) {
+                const char *algo_str = dither_item->valuestring;
+                dither_algorithm_t result = DITHER_FLOYD_STEINBERG;  // Default
+
+                if (strcmp(algo_str, "floyd-steinberg") == 0) {
+                    result = DITHER_FLOYD_STEINBERG;
+                } else if (strcmp(algo_str, "stucki") == 0) {
+                    result = DITHER_STUCKI;
+                } else if (strcmp(algo_str, "burkes") == 0) {
+                    result = DITHER_BURKES;
+                } else if (strcmp(algo_str, "sierra") == 0) {
+                    result = DITHER_SIERRA;
+                }
+
+                cJSON_Delete(json);
+                return result;
+            }
+            cJSON_Delete(json);
+        }
+    }
+
+    // Default
+    return DITHER_FLOYD_STEINBERG;
 }

@@ -33,4 +33,9 @@ int calculate_next_aligned_wakeup(int rotate_interval);
 // hostname buffer must be at least max_len bytes
 void sanitize_hostname(const char *device_name, char *hostname, size_t max_len);
 
+// Get dithering algorithm from processing settings JSON
+// Returns dithering algorithm enum (defaults to DITHER_FLOYD_STEINBERG if not found)
+#include "image_processor.h"
+dither_algorithm_t get_dithering_algorithm_from_settings(void);
+
 #endif

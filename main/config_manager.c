@@ -25,6 +25,9 @@ static char tz_string[TIMEZONE_MAX_LEN] = {0};
 static char access_token[ACCESS_TOKEN_MAX_LEN] = {0};
 static char http_header_key[HTTP_HEADER_KEY_MAX_LEN] = {0};
 static char http_header_value[HTTP_HEADER_VALUE_MAX_LEN] = {0};
+static char processing_settings[2048] = {0};  // JSON string for processing settings
+
+#define NVS_PROCESSING_SETTINGS_KEY "proc_json"
 
 esp_err_t config_manager_init(void)
 {
@@ -152,6 +155,13 @@ esp_err_t config_manager_init(void)
         if (nvs_get_str(nvs_handle, NVS_HTTP_HEADER_VALUE_KEY, http_header_value,
                         &http_header_value_len) == ESP_OK) {
             ESP_LOGI(TAG, "Loaded HTTP header value from NVS (length: %zu)", http_header_value_len);
+        }
+
+        size_t processing_settings_len = sizeof(processing_settings);
+        if (nvs_get_str(nvs_handle, NVS_PROCESSING_SETTINGS_KEY, processing_settings,
+                        &processing_settings_len) == ESP_OK) {
+            ESP_LOGI(TAG, "Loaded processing settings from NVS (length: %zu)",
+                     processing_settings_len);
         }
 
         nvs_close(nvs_handle);
@@ -558,4 +568,28 @@ void config_manager_set_http_header_value(const char *value)
 const char *config_manager_get_http_header_value(void)
 {
     return http_header_value;
+}
+
+void config_manager_set_processing_settings(const char *json)
+{
+    if (json == NULL) {
+        return;
+    }
+
+    strncpy(processing_settings, json, sizeof(processing_settings) - 1);
+    processing_settings[sizeof(processing_settings) - 1] = '\0';
+
+    nvs_handle_t nvs_handle;
+    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle) == ESP_OK) {
+        nvs_set_str(nvs_handle, NVS_PROCESSING_SETTINGS_KEY, processing_settings);
+        nvs_commit(nvs_handle);
+        nvs_close(nvs_handle);
+    }
+
+    ESP_LOGI(TAG, "Processing settings set (length: %zu)", strlen(processing_settings));
+}
+
+const char *config_manager_get_processing_settings(void)
+{
+    return processing_settings;
 }

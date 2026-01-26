@@ -13,7 +13,6 @@ set(SOURCES
     "periodic_tasks.c"
     "png_decoder.c"
     "power_manager.c"
-    "processing_settings.c"
     "utils.c"
     "wifi_manager.c"
     "wifi_provisioning.c"
