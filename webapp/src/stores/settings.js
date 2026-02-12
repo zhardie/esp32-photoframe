@@ -28,6 +28,7 @@ export const useSettingsStore = defineStore("settings", () => {
     wifiPassword: "",
     // Auto Rotate
     autoRotate: true,
+    noProcessing: false,
     rotateHours: 1,
     rotateMinutes: 0,
     autoRotateAligned: true,
@@ -152,6 +153,7 @@ export const useSettingsStore = defineStore("settings", () => {
 
       // Parse config into UI-friendly format
       deviceSettings.value.autoRotate = data.auto_rotate || false;
+      deviceSettings.value.noProcessing = data.no_processing || false;
       deviceSettings.value.autoRotateAligned = data.auto_rotate_aligned !== false;
 
       // Convert seconds to hours and minutes
@@ -240,6 +242,7 @@ export const useSettingsStore = defineStore("settings", () => {
 
     const currentConfig = {
       auto_rotate: deviceSettings.value.autoRotate,
+      no_processing: deviceSettings.value.noProcessing,
       auto_rotate_aligned: deviceSettings.value.autoRotateAligned,
       rotate_interval: rotateInterval,
       display_rotation_deg: deviceSettings.value.displayRotationDeg,

@@ -21,6 +21,7 @@ static char wifi_password[WIFI_PASS_MAX_LEN] = {0};
 
 // Auto Rotate
 static bool auto_rotate_enabled = false;
+static bool no_processing_enabled = false;
 static int rotate_interval = IMAGE_ROTATE_INTERVAL_SEC;
 static bool auto_rotate_aligned = true;
 static bool sleep_schedule_enabled = false;
@@ -132,6 +133,13 @@ esp_err_t config_manager_init(void)
             auto_rotate_enabled = (stored_enabled != 0);
             ESP_LOGI(TAG, "Loaded auto-rotate enabled from NVS: %s",
                      auto_rotate_enabled ? "yes" : "no");
+        }
+
+        uint8_t stored_no_processing = 0;
+        if (nvs_get_u8(nvs_handle, NVS_NO_PROCESSING_KEY, &stored_no_processing) == ESP_OK) {
+            no_processing_enabled = (stored_no_processing != 0);
+            ESP_LOGI(TAG, "Loaded no-processing enabled from NVS: %s",
+                     no_processing_enabled ? "yes" : "no");
         }
 
         int32_t stored_interval = IMAGE_ROTATE_INTERVAL_SEC;
@@ -478,6 +486,25 @@ void config_manager_set_auto_rotate(bool enabled)
 bool config_manager_get_auto_rotate(void)
 {
     return auto_rotate_enabled;
+}
+
+void config_manager_set_no_processing(bool enabled)
+{
+    no_processing_enabled = enabled;
+
+    nvs_handle_t nvs_handle;
+    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle) == ESP_OK) {
+        nvs_set_u8(nvs_handle, NVS_NO_PROCESSING_KEY, enabled ? 1 : 0);
+        nvs_commit(nvs_handle);
+        nvs_close(nvs_handle);
+    }
+
+    ESP_LOGI(TAG, "No-processing %s", enabled ? "enabled" : "disabled");
+}
+
+bool config_manager_get_no_processing(void)
+{
+    return no_processing_enabled;
 }
 
 void config_manager_set_rotate_interval(int seconds)

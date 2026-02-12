@@ -40,6 +40,9 @@ const char *config_manager_get_wifi_password(void);
 void config_manager_set_auto_rotate(bool enabled);
 bool config_manager_get_auto_rotate(void);
 
+void config_manager_set_no_processing(bool enabled);
+bool config_manager_get_no_processing(void);
+
 void config_manager_set_rotate_interval(int seconds);
 int config_manager_get_rotate_interval(void);
 

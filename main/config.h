@@ -80,6 +80,7 @@ typedef enum {
 
 // Auto Rotate
 #define NVS_AUTO_ROTATE_KEY "auto_rotate"
+#define NVS_NO_PROCESSING_KEY "no_processing"
 #define NVS_ROTATE_INTERVAL_KEY "rotate_int"
 #define NVS_AUTO_ROTATE_ALIGNED_KEY "ar_align"
 #define NVS_ROTATION_MODE_KEY "rotation_mode"

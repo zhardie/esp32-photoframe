@@ -10,6 +10,7 @@
 
 #include "board_hal.h"
 #include "color_palette.h"
+#include "config_manager.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
@@ -539,12 +540,16 @@ static esp_err_t process_rgb_buffer_core(uint8_t *rgb_buffer, int width, int hei
     }
 
     // Apply fast Compress Dynamic Range (fast CDR)
-    ESP_LOGI(TAG, "Applying fast Compress Dynamic Range (fast CDR)");
-    fast_compress_dynamic_range(final_image, final_width, final_height, palette_measured);
+    if (!config_manager_get_no_processing()) {
+        ESP_LOGI(TAG, "Applying fast Compress Dynamic Range (fast CDR)");
+        fast_compress_dynamic_range(final_image, final_width, final_height, palette_measured);
 
-    // Apply Dithering (always use measured palette)
-    apply_error_diffusion_dither(final_image, final_width, final_height, palette_measured,
-                                 dither_algorithm);
+        // Apply Dithering (always use measured palette)
+        apply_error_diffusion_dither(final_image, final_width, final_height, palette_measured,
+                                     dither_algorithm);
+    } else {
+        ESP_LOGI(TAG, "Skipping CDR and Dithering (no_processing enabled)");
+    }
 
     *out_buffer = final_image;
     *out_width = final_width;
@@ -645,14 +650,26 @@ static esp_err_t decode_png_buffer(const uint8_t *png_data, size_t png_size, uin
     }
 
     png_set_read_fn(png_ptr, &mem, png_mem_read_callback);
-    png_read_png(png_ptr, info_ptr,
-                 PNG_TRANSFORM_STRIP_16 | PNG_TRANSFORM_PACKING | PNG_TRANSFORM_EXPAND |
-                     PNG_TRANSFORM_STRIP_ALPHA,
-                 NULL);
+    png_read_info(png_ptr, info_ptr);
+
+    // Apply transforms
+    png_set_strip_16(png_ptr);
+    png_set_packing(png_ptr);
+    png_set_expand(png_ptr);
+    png_set_strip_alpha(png_ptr);
+    png_read_update_info(png_ptr, info_ptr);
 
     *width = png_get_image_width(png_ptr, info_ptr);
     *height = png_get_image_height(png_ptr, info_ptr);
-    ESP_LOGI(TAG, "PNG Image info: %dx%d", *width, *height);
+    int channels = png_get_channels(png_ptr, info_ptr);
+
+    ESP_LOGI(TAG, "PNG Image info: %dx%d, channels: %d", *width, *height, channels);
+
+    if (channels != 3) {
+        ESP_LOGE(TAG, "Unsupported channel count: %d (only RGB supported)", channels);
+        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+        return ESP_ERR_NOT_SUPPORTED;
+    }
 
     size_t rgb_size = (*width) * (*height) * 3;
     if (rgb_size > 6 * 1024 * 1024) {
@@ -668,18 +685,9 @@ static esp_err_t decode_png_buffer(const uint8_t *png_data, size_t png_size, uin
         return ESP_ERR_NO_MEM;
     }
 
-    png_bytep *row_pointers = png_get_rows(png_ptr, info_ptr);
-    int channels = png_get_channels(png_ptr, info_ptr);
-    if (channels != 3) {
-        ESP_LOGE(TAG, "Unsupported channel count: %d", channels);
-        heap_caps_free(*rgb_buffer);
-        *rgb_buffer = NULL;
-        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-        return ESP_FAIL;
-    }
-
+    // Read row by row directly into the buffer
     for (int y = 0; y < *height; y++) {
-        memcpy(*rgb_buffer + y * (*width) * 3, row_pointers[y], (*width) * 3);
+        png_read_row(png_ptr, *rgb_buffer + y * (*width) * 3, NULL);
     }
 
     png_destroy_read_struct(&png_ptr, &info_ptr, NULL);

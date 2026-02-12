@@ -375,6 +375,7 @@ Get current configuration.
 {
   "rotate_interval": 3600,
   "auto_rotate": true,
+  "no_processing": false,
   "deep_sleep_enabled": true,
   "image_url": "https://picsum.photos/800/480",
   "rotation_mode": "url"
@@ -384,6 +385,7 @@ Get current configuration.
 **Fields:**
 - `rotate_interval`: Rotation interval in seconds (10-86400)
 - `auto_rotate`: Whether automatic image rotation is enabled
+- `no_processing`: Whether to skip image processing (for pre-dithered images)
 - `deep_sleep_enabled`: Whether deep sleep mode is enabled (for battery saving)
 - `image_url`: URL to fetch images from (empty string if not set)
 - `rotation_mode`: Image rotation mode - `"sdcard"` or `"url"`
@@ -399,6 +401,7 @@ Update configuration.
 {
   "rotate_interval": 3600,
   "auto_rotate": true,
+  "no_processing": false,
   "deep_sleep_enabled": true,
   "image_url": "https://picsum.photos/800/480",
   "rotation_mode": "url"
@@ -408,6 +411,7 @@ Update configuration.
 **Parameters:**
 - `rotate_interval`: Rotation interval in seconds (10-86400)
 - `auto_rotate`: Enable/disable automatic image rotation (boolean)
+- `no_processing`: Enable/disable skipping image processing (boolean)
 - `deep_sleep_enabled`: Enable/disable deep sleep mode (boolean)
   - When enabled: Device enters deep sleep between rotations (~100µA power consumption)
   - When disabled: Device stays awake with HTTP server running (for Home Assistant integration)

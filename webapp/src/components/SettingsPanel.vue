@@ -364,6 +364,14 @@ async function performFactoryReset() {
               v-model="settingsStore.deviceSettings.autoRotate"
               label="Enable Auto-Rotate"
               color="primary"
+              class="mb-0"
+              hide-details
+            />
+
+            <v-switch
+              v-model="settingsStore.deviceSettings.noProcessing"
+              label="Skip image processing (for pre-dithered images)"
+              color="primary"
               class="mb-2"
               hide-details
             />

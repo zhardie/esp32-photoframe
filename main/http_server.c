@@ -1478,6 +1478,7 @@ static esp_err_t config_handler(httpd_req_t *req)
 
         // Auto Rotate
         cJSON_AddBoolToObject(root, "auto_rotate", config_manager_get_auto_rotate());
+        cJSON_AddBoolToObject(root, "no_processing", config_manager_get_no_processing());
         cJSON_AddNumberToObject(root, "rotate_interval", config_manager_get_rotate_interval());
         cJSON_AddBoolToObject(root, "auto_rotate_aligned",
                               config_manager_get_auto_rotate_aligned());
@@ -1659,6 +1660,11 @@ static esp_err_t config_handler(httpd_req_t *req)
         if (auto_rotate_obj && cJSON_IsBool(auto_rotate_obj)) {
             config_manager_set_auto_rotate(cJSON_IsTrue(auto_rotate_obj));
             power_manager_reset_rotate_timer();
+        }
+
+        cJSON *no_processing_obj = cJSON_GetObjectItem(root, "no_processing");
+        if (no_processing_obj && cJSON_IsBool(no_processing_obj)) {
+            config_manager_set_no_processing(cJSON_IsTrue(no_processing_obj));
         }
 
         cJSON *interval_obj = cJSON_GetObjectItem(root, "rotate_interval");
