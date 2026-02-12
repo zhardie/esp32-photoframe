@@ -340,6 +340,9 @@ esp_err_t fetch_and_save_image_from_url(const char *url, char *saved_image_path,
                 processing_settings_get_defaults(&settings);
             }
             dither_algorithm_t algo = processing_settings_get_dithering_algorithm();
+            if (config_manager_get_no_processing()) {
+                algo = DITHER_NONE;
+            }
 
 #ifdef CONFIG_HAS_SDCARD
             // SD card system: process to file

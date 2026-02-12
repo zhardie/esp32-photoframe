@@ -11,7 +11,8 @@ typedef enum {
     DITHER_FLOYD_STEINBERG,
     DITHER_STUCKI,
     DITHER_BURKES,
-    DITHER_SIERRA
+    DITHER_SIERRA,
+    DITHER_NONE
 } dither_algorithm_t;
 
 typedef enum {

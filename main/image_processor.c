@@ -462,6 +462,16 @@ static esp_err_t process_rgb_buffer_core(uint8_t *rgb_buffer, int width, int hei
     int final_width = width;
     int final_height = height;
 
+    if (config_manager_get_no_processing()) {
+        ESP_LOGI(TAG, "No-processing enabled, skipping resize, rotation, CDR and dithering");
+        // We still need to ensure dimensions match the display or at least we don't crash.
+        // If they don't match, we should probably warn, but the user asked to skip processing.
+        *out_buffer = final_image;
+        *out_width = final_width;
+        *out_height = final_height;
+        return ESP_OK;
+    }
+
     bool image_is_portrait = height > width;
     bool board_is_portrait = BOARD_HAL_DISPLAY_HEIGHT > BOARD_HAL_DISPLAY_WIDTH;
     bool needs_rotation = image_is_portrait != board_is_portrait;
@@ -545,8 +555,12 @@ static esp_err_t process_rgb_buffer_core(uint8_t *rgb_buffer, int width, int hei
         fast_compress_dynamic_range(final_image, final_width, final_height, palette_measured);
 
         // Apply Dithering (always use measured palette)
-        apply_error_diffusion_dither(final_image, final_width, final_height, palette_measured,
-                                     dither_algorithm);
+        if (dither_algorithm != DITHER_NONE) {
+            apply_error_diffusion_dither(final_image, final_width, final_height, palette_measured,
+                                         dither_algorithm);
+        } else {
+            ESP_LOGI(TAG, "Dithering skipped (DITHER_NONE)");
+        }
     } else {
         ESP_LOGI(TAG, "Skipping CDR and Dithering (no_processing enabled)");
     }
@@ -571,11 +585,8 @@ static esp_err_t decode_jpg_buffer(const uint8_t *jpg_data, size_t jpg_size, uin
     int original_height = outimg.height;
 
     // Scaling logic - scale down large images to save memory
-    if (outimg.width > BOARD_HAL_DISPLAY_WIDTH * 4 || outimg.height > BOARD_HAL_DISPLAY_HEIGHT * 4)
-        jpeg_cfg.out_scale = JPEG_IMAGE_SCALE_1_4;
-    else if (outimg.width > BOARD_HAL_DISPLAY_WIDTH * 2 ||
-             outimg.height > BOARD_HAL_DISPLAY_HEIGHT * 2)
-        jpeg_cfg.out_scale = JPEG_IMAGE_SCALE_1_2;
+    // Removed automatic scaling to support full 1600x1200 resolution for dithered images
+    jpeg_cfg.out_scale = JPEG_IMAGE_SCALE_0;
 
     if (jpeg_cfg.out_scale != JPEG_IMAGE_SCALE_0) {
         esp_jpeg_get_image_info(&jpeg_cfg, &outimg);
@@ -720,7 +731,7 @@ esp_err_t image_processor_process_to_rgb(const uint8_t *input_data, size_t input
         return ESP_ERR_INVALID_ARG;
     }
 
-    const char *algo_names[] = {"floyd-steinberg", "stucki", "burkes", "sierra"};
+    const char *algo_names[] = {"floyd-steinberg", "stucki", "burkes", "sierra", "none"};
     ESP_LOGI(TAG, "Processing buffer to RGB (%zu bytes, format: %d, dither: %s)", input_size,
              format, algo_names[dither_algorithm]);
 
@@ -775,7 +786,7 @@ esp_err_t image_processor_process_to_rgb(const uint8_t *input_data, size_t input
 esp_err_t image_processor_process(const char *input_path, const char *output_path,
                                   dither_algorithm_t dither_algorithm)
 {
-    const char *algo_names[] = {"floyd-steinberg", "stucki", "burkes", "sierra"};
+    const char *algo_names[] = {"floyd-steinberg", "stucki", "burkes", "sierra", "none"};
     ESP_LOGI(TAG, "Processing %s -> %s (dither: %s)", input_path, output_path,
              algo_names[dither_algorithm]);
 
